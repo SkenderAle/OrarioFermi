@@ -1,45 +1,44 @@
-ORARIO FERMI - PACCHETTO WEB
-===========================
+ORARIO FERMI WEB - v3
+=====================
 
-Contenuto:
-- index.html                 pagina pubblica da condividere con i colleghi
-- Admin.html                 pagina amministratore per caricare i due nuovi HTML
-- app-core.js                parser e controllo incrociato comune alle due pagine
-- dati/orario_classi.html    sorgente classi attuale
-- dati/orario_docenti.html   sorgente docenti attuale
+STRUTTURA
+- index.html                  visualizzatore pubblico mobile
+- Admin.html                  aggiornamento dei dati via GitHub API
+- app-core.js                 parser e controlli
+- sw.js                       notifiche di sistema quando la pagina e' attiva
+- manifest.webmanifest        supporto installazione come web-app
+- dati/orario_classi.html
+- dati/orario_docenti.html
+- dati/orario_sostegno.html   versione pubblica senza iniziali alunni
+- dati/sorveglianze.html
 
-COME PUBBLICARE SU GITHUB PAGES
-1. Crea un repository (pubblico, se vuoi usare GitHub Pages gratuitamente con le normali impostazioni disponibili al tuo account).
-2. Carica TUTTI i file mantenendo esattamente la cartella "dati".
-3. Attiva GitHub Pages sul branch che userai (normalmente main, cartella root).
-4. La pagina pubblica sarà l'indirizzo base del sito; index.html viene aperto automaticamente.
-5. Admin.html sarà raggiungibile aggiungendo /Admin.html all'indirizzo.
+FUNZIONI PRINCIPALI
+- viste Classi / Docenti / Sostegno / Sorveglianze
+- giorno / settimana
+- profilo docente memorizzato sul singolo dispositivo
+- avvisi sonori attivabili/disattivabili e memorizzati
+- popup di cambio ora visibile per 10 minuti
+- notifica di sistema dove supportata/autorizzata
+- avvisi personali di sorveglianza in base al docente selezionato
+- Admin con caricamento dei quattro HTML e controllo incrociato
+- Admin rimuove automaticamente le iniziali degli alunni dal file di sostegno prima di pubblicarlo
 
-PRIMO USO DI ADMIN.HTML
-- Apri Admin.html.
-- In "Impostazioni GitHub" inserisci username/proprietario, nome repository e branch.
-  Se Admin è già su GitHub Pages, username e repository vengono normalmente rilevati da soli.
-- Inserisci un Fine-grained Personal Access Token autorizzato SOLO a quel repository con permesso:
-  Contents: Read and write.
-- Il token NON viene salvato da Admin.html. Username, repository e branch sì, localmente nel browser.
+ORARI AVVISI ATTUALI
+07:55  1a ora
+08:55  2a ora
+09:50  Ricreazione 1 - R1 IN
+09:58  Cambio sorveglianza - R1 OUT
+10:05  3a ora
+10:55  4a ora
+11:50  Ricreazione 2 - R2 IN
+11:58  Cambio sorveglianza - R2 OUT
+12:05  5a ora
+12:55  6a ora
 
-AGGIORNARE L'ORARIO
-1. Produci i due file HTML dal tuo sistema: uno classi e uno docenti.
-2. Apri Admin.html.
-3. Seleziona i due file.
-4. Premi "Analizza e confronta".
-5. Se il controllo è coerente, premi "Pubblica nuovo orario".
-6. Admin crea UN SOLO commit che sostituisce:
-   dati/orario_classi.html
-   dati/orario_docenti.html
-7. index.html legge automaticamente i nuovi dati. Non va modificato né rigenerato.
+NOTA: il cambio IN->OUT delle ricreazioni e' impostato provvisoriamente all'8° minuto (09:58 e 11:58). Se il cambio reale avviene a un altro minuto, basta modificare SCHOOL_EVENTS in index.html.
 
-CONTROLLO INCROCIATO
-Il parser confronta le assegnazioni classe-giorno-ora-docente-disciplina presenti nei due HTML.
-Gestisce anche POT/POT AGG. e le coppie TEDESCO/FRANCESE con classi/docenti accoppiati.
-Se trova differenze o sovrapposizioni, le mostra prima della pubblicazione.
+LIMITI DEL BROWSER MOBILE
+Gli avvisi sono affidabili mentre la pagina e' aperta. Se Android sospende completamente il browser o la pagina viene chiusa, JavaScript non puo' garantire notifiche programmate. Il service worker serve a mostrare la notifica nativa quando la pagina sta ancora eseguendo il controllo.
 
-NOTA SUL FORMATO
-Il sistema è costruito per gli HTML con la stessa struttura dei due file forniti il 9/09/2026:
-titolo <h2> seguito da una tabella con 6 righe orarie e 5 colonne lunedì-venerdì.
-Se in futuro cambia la struttura del generatore HTML, potrebbe essere necessario aggiornare app-core.js.
+GITHUB PAGES
+Caricare l'intera cartella nel repository mantenendo la struttura. index.html e' l'indirizzo pubblico; Admin.html e' la pagina di amministrazione.
