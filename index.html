@@ -33,9 +33,13 @@
   <div class="actions"><button type="button" id="viewDay">Giorno</button><button type="button" id="viewWeek">Settimana</button><button type="button" id="today">Oggi</button></div>
   <div class="profilebar">
     <div class="profileline"><div class="profilewho">Il mio profilo: <strong id="profileName">non impostato</strong></div><button type="button" id="changeProfile">Cambia docente</button></div>
-    <div class="alertcontrols"><button type="button" id="alertToggle">🔕 Avvisi OFF</button><button type="button" id="testAlert">Prova avviso</button></div>
+    <div class="alertcontrols">
+      <button type="button" id="alertToggle">🔕 Avvisi OFF</button>
+      <button type="button" id="notificationToggle">📵 Notifiche OFF</button>
+      <button type="button" id="testAlert">Prova avviso</button>
+    </div>
     <div class="personalnow" id="personalNow" hidden></div>
-    <div class="alerthelp" id="alertHelp">Gli avvisi funzionano mentre la pagina è aperta. Su Android, se autorizzate, vengono mostrate anche come notifiche di sistema.</div>
+    <div class="alerthelp" id="alertHelp">Avvisi = popup + suono/vibrazione mentre la pagina è aperta. Notifiche = messaggi di sistema Android/browser e si attivano separatamente.</div>
   </div>
 </section>
 <div class="titleline" id="titleline" hidden><h2 id="currentTitle"></h2><div class="meta" id="currentMeta"></div></div>
@@ -71,6 +75,7 @@ const SURV_URL='dati/sorveglianze.html';
 const STATE_KEY='fermi-web-v3';
 const PROFILE_KEY='fermi-profile-v1';
 const ALERT_KEY='fermi-alert-v1';
+const NOTIFY_KEY='fermi-notify-v1';
 const SEEN_KEY='fermi-alert-seen-v1';
 const EVENT_DURATION_MIN=10;
 // Orario Fermi: due ricreazioni di 15 minuti. Il cambio IN→OUT è impostato provvisoriamente all'8° minuto.
@@ -86,7 +91,7 @@ const SCHOOL_EVENTS=[
   {time:'12:05',type:'lesson',hour:4,title:'5ª ora'},
   {time:'12:55',type:'lesson',hour:5,title:'6ª ora'}
 ];
-let DATA=null, mode='class', view='day', surveillanceView='area', profile='', alertsEnabled=false, audioCtx=null, swReg=null, alertTimer=null;
+let DATA=null, mode='class', view='day', surveillanceView='area', profile='', alertsEnabled=false, notificationsEnabled=false, audioCtx=null, swReg=null, alertTimer=null;
 let selectedDay=(()=>{const d=new Date().getDay();return d>=1&&d<=5?d-1:0})();
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -95,7 +100,50 @@ function load(){try{const s=JSON.parse(localStorage.getItem(STATE_KEY)||'{}');if
 function loadProfile(){try{return FermiCore.normKey(localStorage.getItem(PROFILE_KEY)||'')}catch(e){return ''}}
 function setProfile(name){profile=FermiCore.normKey(name);try{if(profile)localStorage.setItem(PROFILE_KEY,profile);else localStorage.removeItem(PROFILE_KEY)}catch(e){};$('profileName').textContent=profile||'non impostato';if(DATA&&mode==='teacher'&&DATA.teachers[profile]){$('entity').value=profile;render()}else if(DATA&&mode==='support'&&DATA.support[profile]){$('entity').value=profile;render()}else if(DATA&&mode==='surveillance'&&surveillanceView==='teacher'&&surveillanceTeacherNames().includes(profile)){$('entity').value=profile;render()}updatePersonalNow()}
 function loadAlerts(){try{return localStorage.getItem(ALERT_KEY)==='1'}catch(e){return false}}
-function setAlerts(on){alertsEnabled=!!on;try{localStorage.setItem(ALERT_KEY,alertsEnabled?'1':'0')}catch(e){};$('alertToggle').classList.toggle('on',alertsEnabled);$('alertToggle').textContent=alertsEnabled?'🔔 Avvisi ON':'🔕 Avvisi OFF';if(alertsEnabled){ensureAudio();requestNotifications();checkAlerts(true)}updatePersonalNow()}
+function loadNotifications(){try{return localStorage.getItem(NOTIFY_KEY)==='1'}catch(e){return false}}
+function refreshAlertButtons(){
+  $('alertToggle').classList.toggle('on',alertsEnabled);
+  $('alertToggle').textContent=alertsEnabled?'🔔 Avvisi ON':'🔕 Avvisi OFF';
+  $('notificationToggle').classList.toggle('on',notificationsEnabled);
+  if('Notification' in window && Notification.permission==='denied' && !notificationsEnabled){
+    $('notificationToggle').textContent='🚫 Notifiche bloccate';
+  }else{
+    $('notificationToggle').textContent=notificationsEnabled?'📳 Notifiche ON':'📵 Notifiche OFF';
+  }
+}
+function setAlerts(on){
+  alertsEnabled=!!on;
+  try{localStorage.setItem(ALERT_KEY,alertsEnabled?'1':'0')}catch(e){}
+  refreshAlertButtons();
+  if(alertsEnabled){ensureAudio();checkAlerts(true)}else{$('alertBanner').hidden=true}
+  updatePersonalNow();
+}
+async function setNotifications(on){
+  let wanted=!!on;
+  if(wanted){
+    if(!('Notification' in window)){
+      wanted=false;
+      $('alertHelp').textContent='Questo browser non supporta le notifiche di sistema. Gli avvisi interni restano comunque disponibili.';
+    }else{
+      try{
+        let p=Notification.permission;
+        if(p==='default')p=await Notification.requestPermission();
+        wanted=p==='granted';
+        if(!wanted){
+          $('alertHelp').textContent=p==='denied'
+            ? 'Le notifiche sono bloccate nelle autorizzazioni del browser. Puoi continuare a usare gli avvisi interni.'
+            : 'Autorizzazione alle notifiche non concessa. Gli avvisi interni restano indipendenti.';
+        }else{
+          $('alertHelp').textContent='Notifiche di sistema attive. Gli avvisi popup/suono restano regolabili separatamente.';
+        }
+      }catch(e){wanted=false}
+    }
+  }
+  notificationsEnabled=wanted;
+  try{localStorage.setItem(NOTIFY_KEY,notificationsEnabled?'1':'0')}catch(e){}
+  refreshAlertButtons();
+  if(notificationsEnabled)checkAlerts();
+}
 function surveillanceTeacherNames(){const set=new Set();for(const week of Object.values(DATA.surveillance||{}))for(const day of week||[])for(const key of FermiCore.SURV_KEYS)for(const name of day?.[key]||[])set.add(FermiCore.normKey(name));return [...set].filter(Boolean).sort((a,b)=>a.localeCompare(b,'it'))}
 function names(){if(mode==='class')return Object.keys(DATA.classes);if(mode==='teacher')return Object.keys(DATA.teachers);if(mode==='support')return Object.keys(DATA.support);return surveillanceView==='teacher'?surveillanceTeacherNames():Object.keys(DATA.surveillance)}
 function fillEntity(keep){const n=names();const chosen=keep&&n.includes(keep)?keep:n[0];$('entity').innerHTML=n.map(x=>`<option value="${esc(x)}">${esc(x)}${mode==='teacher'&&DATA.teacherMeta[x]?.subject?' — '+esc(FermiCore.pretty(DATA.teacherMeta[x].subject)):''}</option>`).join('');$('entity').value=chosen||'';$('entityLabel').textContent=mode==='class'?'Classe':mode==='teacher'?'Docente':mode==='support'?'Docente di sostegno':surveillanceView==='teacher'?'Docente':'Area'}
@@ -120,7 +168,7 @@ function updatePersonalNow(){if(!DATA||!profile){$('personalNow').hidden=true;re
 function ensureAudio(){try{const Ctx=window.AudioContext||window.webkitAudioContext;if(!Ctx)return null;if(!audioCtx)audioCtx=new Ctx();if(audioCtx.state==='suspended')audioCtx.resume().catch(()=>{});return audioCtx}catch(e){return null}}
 function beep(){const ctx=ensureAudio();if(!ctx)return;const base=ctx.currentTime+.03;[0,.18,.36,.78,.96,1.14].forEach(off=>{const o=ctx.createOscillator(),g=ctx.createGain();o.frequency.value=880;o.type='sine';g.gain.setValueAtTime(.0001,base+off);g.gain.exponentialRampToValueAtTime(.20,base+off+.01);g.gain.exponentialRampToValueAtTime(.0001,base+off+.11);o.connect(g).connect(ctx.destination);o.start(base+off);o.stop(base+off+.12)});try{navigator.vibrate?.([110,70,110,70,110,260,110,70,110,70,110])}catch(e){}}
 async function requestNotifications(){if(!('Notification' in window))return;try{if(Notification.permission==='default')await Notification.requestPermission()}catch(e){}}
-async function nativeNotify(title,body,tag){if(!alertsEnabled||!('Notification' in window)||Notification.permission!=='granted')return;try{if(swReg)await swReg.showNotification(title,{body,tag,renotify:true});else new Notification(title,{body,tag})}catch(e){}}
+async function nativeNotify(title,body,tag){if(!notificationsEnabled||!('Notification' in window)||Notification.permission!=='granted')return;try{if(swReg)await swReg.showNotification(title,{body,tag,renotify:true});else new Notification(title,{body,tag})}catch(e){}}
 function eventMinutes(e){const [h,m]=e.time.split(':').map(Number);return h*60+m}
 function activeEvent(now=new Date()){const day=now.getDay()-1;if(day<0||day>4)return null;const m=now.getHours()*60+now.getMinutes()+now.getSeconds()/60;let found=null;for(const e of SCHOOL_EVENTS){const start=eventMinutes(e);if(m>=start&&m<start+EVENT_DURATION_MIN)found=e}return found?{...found,day}:null}
 function eventMessage(e){if(!profile)return {title:e.title,body:'Imposta il tuo profilo docente per vedere la destinazione.'};if(e.type==='lesson'){return {title:e.title,body:formatDestinations(profileEntries(e.day,e.hour))}}const areas=supervisionAreas(e.day,e.key);return {title:e.title,body:areas.length?`Sorveglianza: ${areas.join(' • ')}`:'Nessuna sorveglianza assegnata'}}
@@ -128,8 +176,39 @@ function showBanner(e,msg){$('alertTitle').textContent=msg.title;const dayLabel=
 function dailySeenKey(e,now=new Date()){const y=now.getFullYear(),m=String(now.getMonth()+1).padStart(2,'0'),d=String(now.getDate()).padStart(2,'0');return `${y}-${m}-${d}|${e.time}|${profile||'NOPROFILE'}`}
 function wasSeen(k){try{const s=JSON.parse(localStorage.getItem(SEEN_KEY)||'[]');return s.includes(k)}catch(e){return false}}
 function markSeen(k){try{let s=JSON.parse(localStorage.getItem(SEEN_KEY)||'[]');s=[k,...s.filter(x=>x!==k)].slice(0,40);localStorage.setItem(SEEN_KEY,JSON.stringify(s))}catch(e){}}
-function checkAlerts(forceVisual=false){if(!DATA)return;updatePersonalNow();const e=activeEvent();if(!e){if(!forceVisual)$('alertBanner').hidden=true;return}const msg=eventMessage(e);showBanner(e,msg);if(!alertsEnabled)return;const k=dailySeenKey(e);if(!wasSeen(k)){markSeen(k);beep();nativeNotify(`Fermi · ${msg.title}`,msg.body,'fermi-'+k)}}
-function testAlert(){if(!profile){openProfileModal();return}if(!alertsEnabled)setAlerts(true);beep();const now=new Date();let dayLabel=now.toLocaleDateString('it-IT',{weekday:'long'});dayLabel=dayLabel.charAt(0).toUpperCase()+dayLabel.slice(1);const e={time:now.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}),dayLabel,title:'Prova avviso'};const msg={title:'Prova avviso',body:`Profilo ${profile} · il segnale acustico e le notifiche sono attivi.`};showBanner(e,msg);nativeNotify('Fermi · Prova avviso',msg.body,'fermi-test-'+Date.now())}
+function checkAlerts(forceVisual=false){
+  if(!DATA)return;
+  updatePersonalNow();
+  const e=activeEvent();
+  if(!e){if(!forceVisual)$('alertBanner').hidden=true;return}
+  const msg=eventMessage(e);
+  const k=dailySeenKey(e);
+  if(alertsEnabled||forceVisual){
+    showBanner(e,msg);
+    if(alertsEnabled){
+      const ka=k+'|A';
+      if(!wasSeen(ka)){markSeen(ka);beep()}
+    }
+  }else{
+    $('alertBanner').hidden=true;
+  }
+  if(notificationsEnabled){
+    const kn=k+'|N';
+    if(!wasSeen(kn)){markSeen(kn);nativeNotify(`Fermi · ${msg.title}`,msg.body,'fermi-'+kn)}
+  }
+}
+function testAlert(){
+  if(!profile){openProfileModal();return}
+  const now=new Date();
+  let dayLabel=now.toLocaleDateString('it-IT',{weekday:'long'});
+  dayLabel=dayLabel.charAt(0).toUpperCase()+dayLabel.slice(1);
+  const e={time:now.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}),dayLabel,title:'Prova avviso'};
+  const stato=`Avvisi ${alertsEnabled?'ON':'OFF'} · Notifiche ${notificationsEnabled?'ON':'OFF'}`;
+  const msg={title:'Prova avviso',body:`Profilo ${profile} · ${stato}.`};
+  showBanner(e,msg);
+  beep();
+  if(notificationsEnabled)nativeNotify('Fermi · Prova notifica',msg.body,'fermi-test-'+Date.now());
+}
 async function registerSW(){if(!('serviceWorker' in navigator)||location.protocol!=='https:')return;try{swReg=await navigator.serviceWorker.register('sw.js')}catch(e){}}
 async function init(){
   try{
@@ -137,14 +216,14 @@ async function init(){
     DATA=FermiCore.parseAll(classHtml,teacherHtml,supportHtml,survHtml);
     const s=FermiCore.formatValidation(DATA);
     if(s.differences===0&&s.overlaps===0)setStatus(DATA.warnings.length?'warn':'ok',`Dati caricati: ${s.classes} classi · ${s.teachers} docenti · ${s.supportTeachers} sostegno · ${s.surveillanceAreas} aree`);else setStatus('warn',`Controllo: ${s.differences} differenze, ${s.overlaps} sovrapposizioni`);
-    const restored=load();profile=loadProfile();const initialEntity=(mode==='teacher'&&profile&&DATA.teachers[profile])?profile:(mode==='support'&&profile&&DATA.support[profile])?profile:(mode==='surveillance'&&surveillanceView==='teacher'&&profile&&surveillanceTeacherNames().includes(profile))?profile:restored;fillEntity(initialEntity);alertsEnabled=loadAlerts();$('profileName').textContent=profile||'non impostato';$('alertToggle').classList.toggle('on',alertsEnabled);$('alertToggle').textContent=alertsEnabled?'🔔 Avvisi ON':'🔕 Avvisi OFF';
+    const restored=load();profile=loadProfile();const initialEntity=(mode==='teacher'&&profile&&DATA.teachers[profile])?profile:(mode==='support'&&profile&&DATA.support[profile])?profile:(mode==='surveillance'&&surveillanceView==='teacher'&&profile&&surveillanceTeacherNames().includes(profile))?profile:restored;fillEntity(initialEntity);alertsEnabled=loadAlerts();notificationsEnabled=loadNotifications();$('profileName').textContent=profile||'non impostato';refreshAlertButtons();
     $('toolbar').hidden=false;$('titleline').hidden=false;$('legend').hidden=false;$('note').hidden=false;
     [['modeClass','class'],['modeTeacher','teacher'],['modeSupport','support'],['modeSurveillance','surveillance']].forEach(([id,m])=>$(id).addEventListener('click',()=>{mode=m;const preferred=(m==='teacher'&&profile&&DATA.teachers[profile])?profile:(m==='support'&&profile&&DATA.support[profile])?profile:(m==='surveillance'&&surveillanceView==='teacher'&&profile&&surveillanceTeacherNames().includes(profile))?profile:'';fillEntity(preferred);render()}));
     $('survByArea').addEventListener('click',()=>{surveillanceView='area';fillEntity('');render()});$('survByTeacher').addEventListener('click',()=>{surveillanceView='teacher';const preferred=profile&&surveillanceTeacherNames().includes(profile)?profile:'';fillEntity(preferred);render()});
     $('entity').addEventListener('change',render);$('viewDay').addEventListener('click',()=>{view='day';render()});$('viewWeek').addEventListener('click',()=>{view='week';render()});$('today').addEventListener('click',()=>{const d=new Date().getDay();selectedDay=d>=1&&d<=5?d-1:0;view='day';render()});$('daytabs').addEventListener('click',e=>{const b=e.target.closest('button[data-day]');if(!b)return;selectedDay=Number(b.dataset.day);view='day';render()});
-    $('changeProfile').addEventListener('click',openProfileModal);$('saveProfile').addEventListener('click',()=>{setProfile($('profileSelect').value);closeProfileModal();if(alertsEnabled)ensureAudio()});$('skipProfile').addEventListener('click',closeProfileModal);$('alertToggle').addEventListener('click',()=>{if(!profile){openProfileModal();return}setAlerts(!alertsEnabled)});$('testAlert').addEventListener('click',testAlert);$('closeAlert').addEventListener('click',()=>{$('alertBanner').hidden=true});
+    $('changeProfile').addEventListener('click',openProfileModal);$('saveProfile').addEventListener('click',()=>{setProfile($('profileSelect').value);closeProfileModal();if(alertsEnabled)ensureAudio()});$('skipProfile').addEventListener('click',closeProfileModal);$('alertToggle').addEventListener('click',()=>{if(!profile){openProfileModal();return}setAlerts(!alertsEnabled)});$('notificationToggle').addEventListener('click',async()=>{if(!profile){openProfileModal();return}await setNotifications(!notificationsEnabled)});$('testAlert').addEventListener('click',testAlert);$('closeAlert').addEventListener('click',()=>{$('alertBanner').hidden=true});
     document.addEventListener('pointerdown',()=>{if(alertsEnabled)ensureAudio()},{once:true});
-    await registerSW();render();if(!profile)openProfileModal();if(alertsEnabled)checkAlerts();alertTimer=setInterval(checkAlerts,15000);
+    await registerSW();render();if(!profile)openProfileModal();if(alertsEnabled||notificationsEnabled)checkAlerts();alertTimer=setInterval(checkAlerts,15000);
   }catch(err){showError(err)}
 }
 window.addEventListener('focus',()=>checkAlerts());document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkAlerts()});
