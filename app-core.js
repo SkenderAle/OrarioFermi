@@ -3,7 +3,7 @@
 
   const DAYS = ['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì'];
   const CLASS_RE = /^[123][A-D]$/i;
-  const SURV_KEYS = ['r1in','r1out','r2in','r2out'];
+  const SURV_KEYS = ['r1out','r1in','r2out','r2in'];
   const SURV_LABELS = {r1in:'R1 IN',r1out:'R1 OUT',r2in:'R2 IN',r2out:'R2 OUT'};
 
   function normSpace(s){
@@ -226,14 +226,38 @@
       if(!h2||!table) continue;
       const area=normSpace(h2.textContent).replace(/^SORVEGLIANZA\s*[—–-]\s*/i,'');
       if(!area) continue;
-      const rows=Array.from(table.querySelectorAll('tr')).slice(1);
-      const week=Array.from({length:5},()=>({r1in:[],r1out:[],r2in:[],r2out:[]}));
-      for(const tr of rows){
+
+      // Riconoscimento per intestazione: il parser non dipende più
+      // dalla posizione fisica delle colonne nel file HTML.
+      const allRows=Array.from(table.querySelectorAll('tr'));
+      if(!allRows.length) continue;
+      const headers=Array.from(allRows[0].children).map(c=>normKey(c.textContent));
+      const col={};
+      headers.forEach((h,i)=>{
+        const compact=h.replace(/\s+/g,' ');
+        if(/R1\s+OUT/.test(compact)) col.r1out=i;
+        else if(/R1\s+IN/.test(compact)) col.r1in=i;
+        else if(/R2\s+OUT/.test(compact)) col.r2out=i;
+        else if(/R2\s+IN/.test(compact)) col.r2in=i;
+      });
+      const missing=SURV_KEYS.filter(k=>!Number.isInteger(col[k]));
+      if(missing.length){
+        warnings.push(`Colonne sorveglianza non riconosciute in ${area}: ${missing.join(', ')}`);
+        continue;
+      }
+
+      const week=Array.from({length:5},()=>({r1out:[],r1in:[],r2out:[],r2in:[]}));
+      for(const tr of allRows.slice(1)){
         const cells=Array.from(tr.children);
-        if(cells.length<5) continue;
-        const day=dayIndexFromName(cells[0].textContent);
+        if(!cells.length) continue;
+        const day=dayIndexFromName(cells[0]?.textContent||'');
         if(day<0) continue;
-        week[day]={r1in:parseNamesCell(cells[1].textContent),r1out:parseNamesCell(cells[2].textContent),r2in:parseNamesCell(cells[3].textContent),r2out:parseNamesCell(cells[4].textContent)};
+        week[day]={
+          r1out:parseNamesCell(cells[col.r1out]?.textContent||''),
+          r1in:parseNamesCell(cells[col.r1in]?.textContent||''),
+          r2out:parseNamesCell(cells[col.r2out]?.textContent||''),
+          r2in:parseNamesCell(cells[col.r2in]?.textContent||'')
+        };
       }
       surveillance[area]=week;
     }

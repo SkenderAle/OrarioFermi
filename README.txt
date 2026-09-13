@@ -1,5 +1,5 @@
-ORARIO FERMI WEB - v3
-=====================
+ORARIO FERMI WEB - v3.5
+=======================
 
 STRUTTURA
 - index.html                  visualizzatore pubblico mobile
@@ -12,39 +12,31 @@ STRUTTURA
 - dati/orario_sostegno.html   versione pubblica senza iniziali alunni
 - dati/sorveglianze.html
 
-FUNZIONI PRINCIPALI
-- viste Classi / Docenti / Sostegno / Sorveglianze
-- giorno / settimana
-- profilo docente memorizzato sul singolo dispositivo
-- entrando in “Docenti” viene mostrato automaticamente il proprio orario; il menu resta libero per consultare altri colleghi
-- avvisi sonori attivabili/disattivabili e memorizzati
-- popup di cambio ora visibile per 10 minuti
-- notifica di sistema dove supportata/autorizzata
-- avvisi personali di sorveglianza in base al docente selezionato
-- Admin con caricamento dei quattro HTML e controllo incrociato
-- Admin rimuove automaticamente le iniziali degli alunni dal file di sostegno prima di pubblicarlo
+CORREZIONI v3.5 — SORVEGLIANZE
+- Ordine unico: R1 OUT -> R1 IN -> R2 OUT -> R2 IN.
+- OUT = docente della 2a/4a ora che accompagna la classe fuori.
+- IN  = docente della 3a/5a ora che subentra dopo 5 minuti.
+- Avvisi: 09:50 R1 OUT, 09:55 R1 IN, 11:50 R2 OUT, 11:55 R2 IN.
+- Il bip/vibrazione scatta SOLO se il docente del profilo ha una sorveglianza assegnata in quella fase.
+- Nessun segnale sonoro per i normali cambi d'ora delle lezioni.
+- Il pulsante Sorveglianze ON/OFF memorizza la scelta sul dispositivo.
+- Prova suono riproduce la sequenza bip bip bip - bip bip bip.
+- La vista Adesso usa le stesse quattro fasi e gli stessi orari.
+- Il parser riconosce le colonne R1/R2 dall'intestazione, quindi accetta anche file HTML con colonne in ordine diverso.
+- dati/sorveglianze.html e' stato rigenerato dal quadro unico autorevole con ordine OUT/IN.
 
-ORARI AVVISI ATTUALI
-07:55  1a ora
-08:55  2a ora
-09:50  Ricreazione 1 - R1 IN
-09:58  Cambio sorveglianza - R1 OUT
-10:05  3a ora
-10:55  4a ora
-11:50  Ricreazione 2 - R2 IN
-11:58  Cambio sorveglianza - R2 OUT
-12:05  5a ora
-12:55  6a ora
-
-NOTA: il cambio IN->OUT delle ricreazioni e' impostato provvisoriamente all'8° minuto (09:58 e 11:58). Se il cambio reale avviene a un altro minuto, basta modificare SCHOOL_EVENTS in index.html.
+ORARI AVVISI
+09:50  R1 OUT
+09:55  R1 IN
+11:50  R2 OUT
+11:55  R2 IN
 
 LIMITI DEL BROWSER MOBILE
-Gli avvisi sono affidabili mentre la pagina e' aperta. Se Android sospende completamente il browser o la pagina viene chiusa, JavaScript non puo' garantire notifiche programmate. Il service worker serve a mostrare la notifica nativa quando la pagina sta ancora eseguendo il controllo.
+Gli avvisi sono affidabili mentre la pagina e' aperta. Se Android sospende completamente
+il browser o la pagina viene chiusa, JavaScript non puo' garantire notifiche programmate.
+Dopo aver attivato Sorveglianze ON conviene usare una volta Prova suono per sbloccare
+l'audio del browser. Le notifiche di sistema restano una funzione separata.
 
 GITHUB PAGES
-Caricare l'intera cartella nel repository mantenendo la struttura. index.html e' l'indirizzo pubblico; Admin.html e' la pagina di amministrazione.
-
-NOVITA v3.2
-- In Sorveglianze sono disponibili due viste: "Per area" e "Per docente".
-- Nella vista "Per docente" il profilo salvato sul telefono viene selezionato automaticamente, se presente nelle sorveglianze.
-- È sempre possibile scegliere un altro docente dall'elenco.
+Caricare l'intera cartella nel repository mantenendo la struttura.
+index.html e' l'indirizzo pubblico; Admin.html e' la pagina di amministrazione.

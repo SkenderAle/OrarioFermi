@@ -34,12 +34,12 @@
   <div class="profilebar">
     <div class="profileline"><div class="profilewho">Il mio profilo: <strong id="profileName">non impostato</strong></div><button type="button" id="changeProfile">Cambia docente</button></div>
     <div class="alertcontrols">
-      <button type="button" id="alertToggle">🔕 Avvisi OFF</button>
+      <button type="button" id="alertToggle">🔕 Sorveglianze OFF</button>
       <button type="button" id="notificationToggle">📵 Notifiche OFF</button>
-      <button type="button" id="testAlert">Prova avviso</button>
+      <button type="button" id="testAlert">Prova suono</button>
     </div>
     <div class="personalnow" id="personalNow" hidden></div>
-    <div class="alerthelp" id="alertHelp">Avvisi = popup + suono/vibrazione mentre la pagina è aperta. Notifiche = messaggi di sistema Android/browser e si attivano separatamente.</div>
+    <div class="alerthelp" id="alertHelp">Sorveglianze = popup + bip/vibrazione solo quando il docente del profilo è assegnato a quella fase. Orari: R1 OUT 09:50, R1 IN 09:55, R2 OUT 11:50, R2 IN 11:55. Le notifiche di sistema Android/browser si attivano separatamente.</div>
   </div>
 </section>
 <div class="titleline" id="titleline" hidden><h2 id="currentTitle"></h2><div class="meta" id="currentMeta"></div></div>
@@ -77,19 +77,14 @@ const PROFILE_KEY='fermi-profile-v1';
 const ALERT_KEY='fermi-alert-v1';
 const NOTIFY_KEY='fermi-notify-v1';
 const SEEN_KEY='fermi-alert-seen-v1';
-const EVENT_DURATION_MIN=10;
-// Orario Fermi: due ricreazioni di 15 minuti. Il cambio IN→OUT è impostato provvisoriamente all'8° minuto.
+// Avvisi delle sole sorveglianze di ricreazione.
+// OUT = docente della 2ª/4ª ora che accompagna la classe fuori.
+// IN  = docente della 3ª/5ª ora che subentra dopo 5 minuti.
 const SCHOOL_EVENTS=[
-  {time:'07:55',type:'lesson',hour:0,title:'1ª ora'},
-  {time:'08:55',type:'lesson',hour:1,title:'2ª ora'},
-  {time:'09:50',type:'surv',key:'r1in',title:'Ricreazione 1 — R1 IN'},
-  {time:'09:58',type:'surv',key:'r1out',title:'Cambio sorveglianza — R1 OUT'},
-  {time:'10:05',type:'lesson',hour:2,title:'3ª ora'},
-  {time:'10:55',type:'lesson',hour:3,title:'4ª ora'},
-  {time:'11:50',type:'surv',key:'r2in',title:'Ricreazione 2 — R2 IN'},
-  {time:'11:58',type:'surv',key:'r2out',title:'Cambio sorveglianza — R2 OUT'},
-  {time:'12:05',type:'lesson',hour:4,title:'5ª ora'},
-  {time:'12:55',type:'lesson',hour:5,title:'6ª ora'}
+  {time:'09:50',duration:5,type:'surv',key:'r1out',title:'R1 OUT'},
+  {time:'09:55',duration:10,type:'surv',key:'r1in',title:'R1 IN'},
+  {time:'11:50',duration:5,type:'surv',key:'r2out',title:'R2 OUT'},
+  {time:'11:55',duration:10,type:'surv',key:'r2in',title:'R2 IN'}
 ];
 let DATA=null, mode='class', view='day', surveillanceView='area', profile='', alertsEnabled=false, notificationsEnabled=false, audioCtx=null, swReg=null, alertTimer=null;
 let selectedDay=(()=>{const d=new Date().getDay();return d>=1&&d<=5?d-1:0})();
@@ -103,7 +98,7 @@ function loadAlerts(){try{return localStorage.getItem(ALERT_KEY)==='1'}catch(e){
 function loadNotifications(){try{return localStorage.getItem(NOTIFY_KEY)==='1'}catch(e){return false}}
 function refreshAlertButtons(){
   $('alertToggle').classList.toggle('on',alertsEnabled);
-  $('alertToggle').textContent=alertsEnabled?'🔔 Avvisi ON':'🔕 Avvisi OFF';
+  $('alertToggle').textContent=alertsEnabled?'🔔 Sorveglianze ON':'🔕 Sorveglianze OFF';
   $('notificationToggle').classList.toggle('on',notificationsEnabled);
   if('Notification' in window && Notification.permission==='denied' && !notificationsEnabled){
     $('notificationToggle').textContent='🚫 Notifiche bloccate';
@@ -164,24 +159,46 @@ function closeProfileModal(){$('profileModal').hidden=true}
 function profileEntries(day,hour){if(!profile)return[];const out=[];for(const e of DATA.teachers[profile]?.[hour]?.[day]||[])out.push({type:'teacher',class:e.class,subject:e.subject,label:e.label});for(const e of DATA.support[profile]?.[hour]?.[day]||[])out.push({type:'support',class:e.class,subject:e.subject,label:'SOST'});return out}
 function supervisionAreas(day,key){return profile?FermiCore.surveillanceForTeacher(DATA.surveillance,profile,day,key):[]}
 function formatDestinations(entries){if(!entries.length)return 'Ora libera';return entries.map(e=>`${e.class?`Classe ${e.class}`:'Classe non indicata'} · ${FermiCore.pretty(e.subject||'')}${e.label?' ['+e.label+']':''}`).join(' • ')}
-function updatePersonalNow(){if(!DATA||!profile){$('personalNow').hidden=true;return}const now=new Date(),day=now.getDay()-1;if(day<0||day>4){$('personalNow').innerHTML=`<strong>${esc(profile)}</strong> · oggi non ci sono lezioni`; $('personalNow').hidden=false;return}const mins=now.getHours()*60+now.getMinutes();const starts=[475,535,605,655,725,775],ends=[535,590,655,710,775,835];let h=starts.findIndex((s,i)=>mins>=s&&mins<ends[i]);if(h>=0){$('personalNow').innerHTML=`<strong>Adesso:</strong> ${esc(formatDestinations(profileEntries(day,h)))}`;$('personalNow').hidden=false;return}const breakKey=mins>=590&&mins<605?(mins<598?'r1in':'r1out'):mins>=710&&mins<725?(mins<718?'r2in':'r2out'):'';if(breakKey){const a=supervisionAreas(day,breakKey);$('personalNow').innerHTML=`<strong>${esc(FermiCore.SURV_LABELS[breakKey])}:</strong> ${a.length?esc(a.join(' • ')):'nessuna sorveglianza assegnata'}`;$('personalNow').hidden=false;return}$('personalNow').hidden=true}
+function updatePersonalNow(){if(!DATA||!profile){$('personalNow').hidden=true;return}const now=new Date(),day=now.getDay()-1;if(day<0||day>4){$('personalNow').innerHTML=`<strong>${esc(profile)}</strong> · oggi non ci sono lezioni`; $('personalNow').hidden=false;return}const mins=now.getHours()*60+now.getMinutes();const starts=[475,535,605,655,725,775],ends=[535,590,655,710,775,835];let h=starts.findIndex((s,i)=>mins>=s&&mins<ends[i]);if(h>=0){$('personalNow').innerHTML=`<strong>Adesso:</strong> ${esc(formatDestinations(profileEntries(day,h)))}`;$('personalNow').hidden=false;return}const breakKey=mins>=590&&mins<605?(mins<595?'r1out':'r1in'):mins>=710&&mins<725?(mins<715?'r2out':'r2in'):'';if(breakKey){const a=supervisionAreas(day,breakKey);$('personalNow').innerHTML=`<strong>${esc(FermiCore.SURV_LABELS[breakKey])}:</strong> ${a.length?esc(a.join(' • ')):'nessuna sorveglianza assegnata'}`;$('personalNow').hidden=false;return}$('personalNow').hidden=true}
 function ensureAudio(){try{const Ctx=window.AudioContext||window.webkitAudioContext;if(!Ctx)return null;if(!audioCtx)audioCtx=new Ctx();if(audioCtx.state==='suspended')audioCtx.resume().catch(()=>{});return audioCtx}catch(e){return null}}
 function beep(){const ctx=ensureAudio();if(!ctx)return;const base=ctx.currentTime+.03;[0,.18,.36,.78,.96,1.14].forEach(off=>{const o=ctx.createOscillator(),g=ctx.createGain();o.frequency.value=880;o.type='sine';g.gain.setValueAtTime(.0001,base+off);g.gain.exponentialRampToValueAtTime(.20,base+off+.01);g.gain.exponentialRampToValueAtTime(.0001,base+off+.11);o.connect(g).connect(ctx.destination);o.start(base+off);o.stop(base+off+.12)});try{navigator.vibrate?.([110,70,110,70,110,260,110,70,110,70,110])}catch(e){}}
 async function requestNotifications(){if(!('Notification' in window))return;try{if(Notification.permission==='default')await Notification.requestPermission()}catch(e){}}
 async function nativeNotify(title,body,tag){if(!notificationsEnabled||!('Notification' in window)||Notification.permission!=='granted')return;try{if(swReg)await swReg.showNotification(title,{body,tag,renotify:true});else new Notification(title,{body,tag})}catch(e){}}
 function eventMinutes(e){const [h,m]=e.time.split(':').map(Number);return h*60+m}
-function activeEvent(now=new Date()){const day=now.getDay()-1;if(day<0||day>4)return null;const m=now.getHours()*60+now.getMinutes()+now.getSeconds()/60;let found=null;for(const e of SCHOOL_EVENTS){const start=eventMinutes(e);if(m>=start&&m<start+EVENT_DURATION_MIN)found=e}return found?{...found,day}:null}
-function eventMessage(e){if(!profile)return {title:e.title,body:'Imposta il tuo profilo docente per vedere la destinazione.'};if(e.type==='lesson'){return {title:e.title,body:formatDestinations(profileEntries(e.day,e.hour))}}const areas=supervisionAreas(e.day,e.key);return {title:e.title,body:areas.length?`Sorveglianza: ${areas.join(' • ')}`:'Nessuna sorveglianza assegnata'}}
+function activeEvent(now=new Date()){const day=now.getDay()-1;if(day<0||day>4)return null;const m=now.getHours()*60+now.getMinutes()+now.getSeconds()/60;let found=null;for(const e of SCHOOL_EVENTS){const start=eventMinutes(e);if(m>=start&&m<start+(e.duration||5))found=e}return found?{...found,day}:null}
+function eventMessage(e){
+  if(!profile)return null;
+  const areas=supervisionAreas(e.day,e.key);
+  if(!areas.length)return null;
+  const isOut=e.key.endsWith('out');
+  return {
+    title:e.title,
+    body:isOut
+      ? `Porta fuori la classe · ${areas.join(' • ')}`
+      : `Seconda parte della sorveglianza · ${areas.join(' • ')}`
+  };
+}
 function showBanner(e,msg){$('alertTitle').textContent=msg.title;const dayLabel=e.dayLabel||(Number.isInteger(e.day)&&e.day>=0&&e.day<DATA.days.length?DATA.days[e.day]:'');$('alertTime').textContent=e.time+(dayLabel?' · '+dayLabel:'');$('alertBody').textContent=msg.body;$('alertBanner').hidden=false}
-function dailySeenKey(e,now=new Date()){const y=now.getFullYear(),m=String(now.getMonth()+1).padStart(2,'0'),d=String(now.getDate()).padStart(2,'0');return `${y}-${m}-${d}|${e.time}|${profile||'NOPROFILE'}`}
+function dailySeenKey(e,now=new Date()){const y=now.getFullYear(),m=String(now.getMonth()+1).padStart(2,'0'),d=String(now.getDate()).padStart(2,'0');return `${y}-${m}-${d}|${e.time}|${e.key||e.title}|${profile||'NOPROFILE'}`}
 function wasSeen(k){try{const s=JSON.parse(localStorage.getItem(SEEN_KEY)||'[]');return s.includes(k)}catch(e){return false}}
 function markSeen(k){try{let s=JSON.parse(localStorage.getItem(SEEN_KEY)||'[]');s=[k,...s.filter(x=>x!==k)].slice(0,40);localStorage.setItem(SEEN_KEY,JSON.stringify(s))}catch(e){}}
 function checkAlerts(forceVisual=false){
   if(!DATA)return;
   updatePersonalNow();
   const e=activeEvent();
-  if(!e){if(!forceVisual)$('alertBanner').hidden=true;return}
+  if(!e){
+    if(!forceVisual)$('alertBanner').hidden=true;
+    return;
+  }
+
   const msg=eventMessage(e);
+  // Nessun bip, popup o notifica se il docente non è assegnato
+  // a questa specifica fase della ricreazione.
+  if(!msg){
+    $('alertBanner').hidden=true;
+    return;
+  }
+
   const k=dailySeenKey(e);
   if(alertsEnabled||forceVisual){
     showBanner(e,msg);
@@ -192,6 +209,7 @@ function checkAlerts(forceVisual=false){
   }else{
     $('alertBanner').hidden=true;
   }
+
   if(notificationsEnabled){
     const kn=k+'|N';
     if(!wasSeen(kn)){markSeen(kn);nativeNotify(`Fermi · ${msg.title}`,msg.body,'fermi-'+kn)}
@@ -202,12 +220,12 @@ function testAlert(){
   const now=new Date();
   let dayLabel=now.toLocaleDateString('it-IT',{weekday:'long'});
   dayLabel=dayLabel.charAt(0).toUpperCase()+dayLabel.slice(1);
-  const e={time:now.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}),dayLabel,title:'Prova avviso'};
+  const e={time:now.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}),dayLabel,title:'Prova sorveglianza'};
   const stato=`Avvisi ${alertsEnabled?'ON':'OFF'} · Notifiche ${notificationsEnabled?'ON':'OFF'}`;
-  const msg={title:'Prova avviso',body:`Profilo ${profile} · ${stato}.`};
+  const msg={title:'Prova sorveglianza',body:`Profilo ${profile} · ${stato} · bip bip bip · bip bip bip.`};
   showBanner(e,msg);
   beep();
-  if(notificationsEnabled)nativeNotify('Fermi · Prova notifica',msg.body,'fermi-test-'+Date.now());
+  if(notificationsEnabled)nativeNotify('Fermi · Prova sorveglianza',msg.body,'fermi-test-'+Date.now());
 }
 async function registerSW(){if(!('serviceWorker' in navigator)||location.protocol!=='https:')return;try{swReg=await navigator.serviceWorker.register('sw.js')}catch(e){}}
 async function init(){
