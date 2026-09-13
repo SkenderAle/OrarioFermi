@@ -16,6 +16,7 @@ FUNZIONI PRINCIPALI
 - viste Classi / Docenti / Sostegno / Sorveglianze
 - giorno / settimana
 - profilo docente memorizzato sul singolo dispositivo
+- entrando in “Docenti” viene mostrato automaticamente il proprio orario; il menu resta libero per consultare altri colleghi
 - avvisi sonori attivabili/disattivabili e memorizzati
 - popup di cambio ora visibile per 10 minuti
 - notifica di sistema dove supportata/autorizzata
@@ -42,3 +43,8 @@ Gli avvisi sono affidabili mentre la pagina e' aperta. Se Android sospende compl
 
 GITHUB PAGES
 Caricare l'intera cartella nel repository mantenendo la struttura. index.html e' l'indirizzo pubblico; Admin.html e' la pagina di amministrazione.
+
+NOVITA v3.2
+- In Sorveglianze sono disponibili due viste: "Per area" e "Per docente".
+- Nella vista "Per docente" il profilo salvato sul telefono viene selezionato automaticamente, se presente nelle sorveglianze.
+- È sempre possibile scegliere un altro docente dall'elenco.
