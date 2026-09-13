@@ -40,3 +40,9 @@ l'audio del browser. Le notifiche di sistema restano una funzione separata.
 GITHUB PAGES
 Caricare l'intera cartella nel repository mantenendo la struttura.
 index.html e' l'indirizzo pubblico; Admin.html e' la pagina di amministrazione.
+
+
+PATCH v3.5.1
+- Corretto ordine visuale sorveglianze: R1 OUT, R1 IN, R2 OUT, R2 IN.
+- Nessuna modifica alle assegnazioni/luoghi.
+- Aggiunto cache-busting app-core.js?v=3.5.1 per evitare che il browser mostri ancora il vecchio ordine IN/OUT.
