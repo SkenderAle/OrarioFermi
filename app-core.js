@@ -157,7 +157,8 @@
       const cls=normKey(parts.shift()||'');
       const pupil=parts.length>=3 ? normSpace(parts.pop()) : '';
       const subject=normSpace(parts.join(' · '));
-      out.push({kind:'sost',class:cls,subject:subject||'SOSTEGNO',pupil,label:'SOST'});
+      const isAlt=/\bALT(?:\s+IRC|ERNATIVA)?\b/i.test(subject);
+      out.push({kind:isAlt?'alt':'sost',class:cls,subject:isAlt?'ALT IRC':(subject||'SOSTEGNO'),pupil,label:isAlt?'ALT':'SOST'});
     }
     return out;
   }
