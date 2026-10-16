@@ -43,6 +43,7 @@
   </div>
 </section>
 <div class="titleline" id="titleline" hidden><h2 id="currentTitle"></h2><div class="meta" id="currentMeta"></div></div>
+<aside id="altCommitments" class="alt" aria-label="Impegni di alternativa IRC" hidden></aside>
 <nav class="daytabs" id="daytabs" aria-label="Giorni della settimana" hidden></nav>
 <main id="content" aria-live="polite"><div class="loading">Sto leggendo i file dell'orario…</div></main>
 <div class="legend" id="legend" hidden><span class="lpot">POT = potenziamento</span><span class="lsost">SOST = sostegno</span><span class="lalt">ALT = alternativa</span><span class="lsurv">R1/R2 = ricreazioni</span></div>
@@ -151,11 +152,30 @@ function fillEntity(keep){const n=names();const chosen=keep&&n.includes(keep)?ke
 function renderTabs(){$('daytabs').innerHTML=DATA.days.map((d,i)=>`<button type="button" data-day="${i}" class="${i===selectedDay?'active':''}" aria-pressed="${i===selectedDay}">${esc(d.slice(0,3))}</button>`).join('');$('daytabs').hidden=view==='week'}
 function entryHTML(e){const badge=e.label?`<span class="badge">${esc(e.label)}</span>`:'';const css=e.kind==='sost'?'sost':e.kind==='alt'?'alt':(e.kind==='pot'||e.kind==='potagg')?'pot':'';if(mode==='class')return `<div class="entry ${css}"><div class="subject">${esc(FermiCore.pretty(e.subject||e.kind))}${badge}</div><div class="detail">${esc(e.teacher||'')}</div></div>`;if(mode==='support'){const isAlt=e.kind==='alt';return `<div class="entry ${isAlt?'alt':'sost'}"><div class="subject">${esc(FermiCore.pretty(e.subject||(isAlt?'ALT IRC':'SOSTEGNO')))}<span class="badge">${isAlt?'ALT':'SOST'}</span></div><div class="detail">Classe ${esc(e.class||'')}</div></div>`;}return `<div class="entry ${css}"><div class="subject">${esc(FermiCore.pretty(e.subject||e.kind))}${badge}</div><div class="detail">Classe ${esc(e.class||'')}</div></div>`}
 function cellHTML(entries){return entries&&entries.length?entries.map(entryHTML).join(''):'<div class="empty">Libera</div>'}
+function renderAltCommitments(){
+  const box=$('altCommitments');
+  box.hidden=true;
+  box.innerHTML='';
+  if(mode!=='teacher'&&mode!=='support')return;
+  const teacher=$('entity').value, rows=[], seen=new Set();
+  const times=['07:55–08:55','08:55–09:55','10:05–10:55','10:55–11:55','12:05–12:55','12:55–13:55'];
+  for(let day=0;day<5;day++)for(let hour=0;hour<6;hour++){
+    const entries=[...(DATA.teachers[teacher]?.[hour]?.[day]||[]),...(DATA.support[teacher]?.[hour]?.[day]||[])];
+    for(const e of entries){
+      if(e.kind!=='alt')continue;
+      const key=[day,hour,e.class].join('|');
+      if(seen.has(key))continue;
+      seen.add(key);
+      rows.push(`<div class="detail">${esc(DATA.days[day])} · ${hour+1}ª ora (${times[hour]}) · Classe ${esc(e.class||'non indicata')}</div>`);
+    }
+  }
+  if(rows.length){box.innerHTML='<strong>Impegni ALT IRC</strong>'+rows.join('');box.hidden=false;}
+}
 function gridForCurrent(){if(mode==='class')return DATA.classes[$('entity').value];if(mode==='teacher')return DATA.teachers[$('entity').value];if(mode==='support')return DATA.support[$('entity').value];return null}
 function renderDay(day){if(mode==='surveillance')return renderSurveillanceDay(day);const g=gridForCurrent();let h='<div class="schedule">';for(let i=0;i<6;i++)h+=`<div class="hour"><div class="hourno">${i+1}ª</div><div class="cell">${cellHTML(g[i][day])}</div></div>`;return h+'</div>'}
 function renderWeek(){if(mode==='surveillance')return '<div class="week">'+DATA.days.map((d,day)=>`<section class="weekday"><h3>${esc(d)}</h3>${renderSurveillanceDay(day)}</section>`).join('')+'</div>';const g=gridForCurrent();return '<div class="week">'+DATA.days.map((d,day)=>{let h=`<section class="weekday"><h3>${esc(d)}</h3>`;for(let i=0;i<6;i++)h+=`<div class="hour"><div class="hourno">${i+1}ª</div><div class="cell">${cellHTML(g[i][day])}</div></div>`;return h+'</section>'}).join('')+'</div>'}
 function renderSurveillanceDay(day){if(surveillanceView==='teacher'){const teacher=$('entity').value;return '<div class="survgrid">'+SURV_DISPLAY_KEYS.map(k=>{const areas=FermiCore.surveillanceForTeacher(DATA.surveillance,teacher,day,k);return `<div class="survitem"><div class="survlabel">${esc(FermiCore.SURV_LABELS[k])}</div><div class="survnames">${areas.length?esc(areas.join(' • ')):'<span class="empty">Nessuna sorveglianza</span>'}</div></div>`}).join('')+'</div>'}const area=$('entity').value, x=DATA.surveillance[area]?.[day]||{};return '<div class="survgrid">'+SURV_DISPLAY_KEYS.map(k=>`<div class="survitem"><div class="survlabel">${esc(FermiCore.SURV_LABELS[k])}</div><div class="survnames">${x[k]?.length?esc(x[k].join(', ')):'<span class="empty">Nessuno</span>'}</div></div>`).join('')+'</div>'}
-function render(){if(!DATA)return;for(const [id,val] of [['modeClass','class'],['modeTeacher','teacher'],['modeSupport','support'],['modeSurveillance','surveillance']])$(id).classList.toggle('active',mode===val);$('survViewBar').hidden=mode!=='surveillance';$('survByArea').classList.toggle('active',surveillanceView==='area');$('survByTeacher').classList.toggle('active',surveillanceView==='teacher');$('viewDay').classList.toggle('active',view==='day');$('viewWeek').classList.toggle('active',view==='week');renderTabs();const current=$('entity').value;$('currentTitle').textContent=mode==='class'?`Classe ${current}`:mode==='surveillance'&&surveillanceView==='area'?current:current;let meta='';if(mode==='class')meta=`${gridForCurrent().flat(2).length} assegnazioni/compresenze`;else if(mode==='teacher')meta=DATA.teacherMeta[current]?.subject?FermiCore.pretty(DATA.teacherMeta[current].subject):'';else if(mode==='support')meta='Docente di sostegno';else meta=surveillanceView==='teacher'?'Sorveglianze del docente':'Sorveglianze per area';$('currentMeta').textContent=meta;$('content').innerHTML=view==='day'?renderDay(selectedDay):renderWeek();save();updatePersonalNow()}
+function render(){if(!DATA)return;for(const [id,val] of [['modeClass','class'],['modeTeacher','teacher'],['modeSupport','support'],['modeSurveillance','surveillance']])$(id).classList.toggle('active',mode===val);$('survViewBar').hidden=mode!=='surveillance';$('survByArea').classList.toggle('active',surveillanceView==='area');$('survByTeacher').classList.toggle('active',surveillanceView==='teacher');$('viewDay').classList.toggle('active',view==='day');$('viewWeek').classList.toggle('active',view==='week');renderTabs();renderAltCommitments();const current=$('entity').value;$('currentTitle').textContent=mode==='class'?`Classe ${current}`:mode==='surveillance'&&surveillanceView==='area'?current:current;let meta='';if(mode==='class')meta=`${gridForCurrent().flat(2).length} assegnazioni/compresenze`;else if(mode==='teacher')meta=DATA.teacherMeta[current]?.subject?FermiCore.pretty(DATA.teacherMeta[current].subject):'';else if(mode==='support')meta='Docente di sostegno';else meta=surveillanceView==='teacher'?'Sorveglianze del docente':'Sorveglianze per area';$('currentMeta').textContent=meta;$('content').innerHTML=view==='day'?renderDay(selectedDay):renderWeek();save();updatePersonalNow()}
 function setStatus(kind,text){$('status').className='status '+kind;$('statusText').textContent=text}
 function showError(err){setStatus('bad','Orario non disponibile');$('toolbar').hidden=true;$('titleline').hidden=true;$('daytabs').hidden=true;$('legend').hidden=true;$('note').hidden=true;$('content').innerHTML=`<div class="errorbox"><h2>Non riesco a caricare l'orario</h2><p>${esc(err.message||err)}</p><p>Se stai aprendo il file direttamente dal computer, usa il sito GitHub Pages: i browser spesso bloccano il caricamento locale dei file HTML collegati.</p></div>`}
 async function getText(url){const sep=url.includes('?')?'&':'?';const r=await fetch(url+sep+'v='+Date.now(),{cache:'no-store'});if(!r.ok)throw new Error(`${url}: errore HTTP ${r.status}`);return await r.text()}
